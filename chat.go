@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"time"
+	"strings"
 )
 
 var (
@@ -17,13 +17,35 @@ func CheckError(err error) {
 	}
 }
 
-func client() {
+func listen_udp() (string, string) {
 
-	fmt.Println("Provide the IP: ")
-	var i string
-	_, err := fmt.Scanf("%s", &i)
+	ServerAddr, err := net.ResolveUDPAddr("udp", ":45678")
+	CheckError(err)
 
-	ServerAddr, err := net.ResolveUDPAddr("udp", i+":45678")
+	/* Now listen at selected port */
+	ServerConn, err := net.ListenUDP("udp", ServerAddr)
+	CheckError(err)
+	defer ServerConn.Close()
+
+	buf := make([]byte, 1024)
+
+	n, addr, err := ServerConn.ReadFromUDP(buf)
+
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return "", ""
+	}
+	//fmt.Println("Received ", string(buf[0:n]), " from ", addr)
+
+	conf := string(buf[0:n])
+
+	return conf, addr
+
+}
+
+func send_udp(ip_to string, msg string) bool {
+
+	ServerAddr, err := net.ResolveUDPAddr("udp", ip_to+":45678")
 	CheckError(err)
 
 	LocalAddr, err := net.ResolveUDPAddr("udp", global_local_ip+":45678")
@@ -34,19 +56,37 @@ func client() {
 
 	defer Conn.Close()
 
-	for {
-		msg := "hello-there"
-
-		buf := []byte(msg)
-		_, err := Conn.Write(buf)
-		if err != nil {
-			fmt.Println(msg, err)
-		}
-		time.Sleep(time.Second * 1)
+	buf := []byte(msg)
+	_, err := Conn.Write(buf)
+	if err != nil {
+		fmt.Println(msg, err)
+		return false
 	}
+	return true
+}
+
+func client() {
+
+	fmt.Println("Provide the IP: ")
+	var i string
+	_, err := fmt.Scanf("%s", &i)
+
+	send_udp(i, "hello-there")
 }
 
 func server() {
+
+	conf, addr := listen_udp()
+
+	if strings.Contains(conf, "hello-there") {
+
+		fmt.Println("CONFIRMED")
+		send_udp(addr, "hi-there")
+	}
+
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
 
 }
 
