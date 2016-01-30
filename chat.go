@@ -78,7 +78,7 @@ func listen_udp() (string, string) {
 	n, addr, err := ServerConn.ReadFromUDP(buf)
 
 	if err != nil {
-		fmt.Println("Error: ", err)
+		//fmt.Println("Error: ", err)
 		return "", ""
 	}
 	//fmt.Println("Received ", string(buf[0:n]), " from ", addr)
@@ -135,8 +135,16 @@ func client() {
 
 func server() {
 
-	conf, addr := listen_udp()
+	fmt.Println("Pass this IP to your colleague: " + global_local_ip)
+	conf := ""
+	addr := ""
+	for {
+		conf, addr = listen_udp()
 
+		if conf != "" && addr != "" {
+			break
+		}
+	}
 	if strings.Contains(conf, "hello-there") {
 		remote_ip = addr
 		fmt.Println("CONFIRMED")
@@ -199,7 +207,7 @@ func main() {
 		c = make(chan string)
 		for {
 			s := <-c
-			fmt.Println(s)
+			fmt.Println("Remote> " + s)
 		}
 	}
 
