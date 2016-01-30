@@ -5,16 +5,61 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 var (
 	global_local_ip string = ""
+	remote_ip       string = ""
+	c               chan string
 )
 
 func CheckError(err error) {
 	if err != nil {
 		fmt.Println("Error: ", err)
 	}
+}
+func listen_msg() {
+
+	for {
+
+		ServerAddr, err := net.ResolveUDPAddr("udp", ":45678")
+		CheckError(err)
+
+		/* Now listen at selected port */
+		ServerConn, err := net.ListenUDP("udp", ServerAddr)
+		CheckError(err)
+		defer ServerConn.Close()
+
+		buf := make([]byte, 1024)
+
+		n, _, err := ServerConn.ReadFromUDP(buf)
+
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+		//fmt.Println("Received ", string(buf[0:n]), " from ", addr)
+
+		conf := string(buf[0:n])
+
+		c <- conf
+	}
+}
+
+func send_msg() {
+
+	for {
+		fmt.Print("Msg> ")
+		var i string
+		_, _ = fmt.Scanf("%s", &i)
+		send_udp(remote_ip, i)
+	}
+}
+func chat() {
+
+	go listen_msg()
+	go send_msg()
 }
 
 func listen_udp() (string, string) {
@@ -28,7 +73,8 @@ func listen_udp() (string, string) {
 	defer ServerConn.Close()
 
 	buf := make([]byte, 1024)
-
+	t := time.Now()
+	ServerConn.SetDeadline(t.Add(3000 * time.Millisecond))
 	n, addr, err := ServerConn.ReadFromUDP(buf)
 
 	if err != nil {
@@ -39,7 +85,7 @@ func listen_udp() (string, string) {
 
 	conf := string(buf[0:n])
 
-	return conf, addr
+	return conf, addr.IP.String()
 
 }
 
@@ -57,7 +103,7 @@ func send_udp(ip_to string, msg string) bool {
 	defer Conn.Close()
 
 	buf := []byte(msg)
-	_, err := Conn.Write(buf)
+	_, err = Conn.Write(buf)
 	if err != nil {
 		fmt.Println(msg, err)
 		return false
@@ -67,11 +113,24 @@ func send_udp(ip_to string, msg string) bool {
 
 func client() {
 
-	fmt.Println("Provide the IP: ")
+	fmt.Print("Provide the IP: ")
 	var i string
-	_, err := fmt.Scanf("%s", &i)
+	_, _ = fmt.Scanf("%s", &i)
 
 	send_udp(i, "hello-there")
+	conf, addr := listen_udp()
+	for {
+		send_udp(i, "hello-there")
+		conf, addr = listen_udp()
+		if conf == "" && addr == "" {
+			break
+		}
+	}
+	if conf == "hi-there" {
+
+		remote_ip = addr
+		chat()
+	}
 }
 
 func server() {
@@ -79,13 +138,10 @@ func server() {
 	conf, addr := listen_udp()
 
 	if strings.Contains(conf, "hello-there") {
-
+		remote_ip = addr
 		fmt.Println("CONFIRMED")
 		send_udp(addr, "hi-there")
-	}
-
-	if err != nil {
-		fmt.Println("Error: ", err)
+		chat()
 	}
 
 }
@@ -104,21 +160,6 @@ func local_ip() string {
 
 func main() {
 
-	/*
-		Choose 1 to be the client, choose 2 to be the server
-
-
-		-------- ACTIVE (Client) ---------
-
-			Once you have the IP of your fellow partner, introduce it and wait for a confirmation that both of you are connected
-
-		-------- PASSIVE (Server) ---------
-
-			Give to the client the IP that is showing on the screen and wait for a confirmation that both of you are connected
-
-
-	*/
-
 	argsWithoutProg := os.Args[1:]
 
 	if len(argsWithoutProg) < 1 {
@@ -127,17 +168,18 @@ func main() {
 
 		fmt.Println("Choose 1 to be the client, choose 2 to be the server\n")
 
-		fmt.Println("-------- CLIENT ---------")
+		fmt.Println("-------- ACTIVE (Client) ---------")
 
 		fmt.Println("	Once you have the IP of your fellow partner, introduce it and wait for a confirmation that both of you are connected\n")
 
-		fmt.Println("-------- SERVER ---------")
+		fmt.Println("-------- PASSIVE (Server) ---------")
 
 		fmt.Println("	Give to the client the IP that is showing on the screen and wait for a confirmation that both of you are connected\n ")
 
 		fmt.Println("Example --> go run ./chat.go 1\n\n")
 
 	} else {
+
 		global_local_ip = local_ip()
 
 		if global_local_ip == "" {
@@ -154,29 +196,11 @@ func main() {
 
 			}
 		}
-		// var i int
-		// _, err := fmt.Scanf("%d", &i)
-
-		// ServerAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10001")
-		// CheckError(err)
-
-		// LocalAddr, err2 := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-		// CheckError(err2)
-
-		// Conn, err3 := net.DialUDP("udp", LocalAddr, ServerAddr)
-		// CheckError(err3)
-
-		// defer Conn.Close()
-
-		// for {
-		// 	msg := strconv.Itoa(i)
-		// 	i++
-		// 	buf := []byte(msg)
-		// 	_, err := Conn.Write(buf)
-		// 	if err != nil {
-		// 		fmt.Println(msg, err)
-		// 	}
-		// 	time.Sleep(time.Second * 1)
-		// }
+		c = make(chan string)
+		for {
+			s := <-c
+			fmt.Println(s)
+		}
 	}
+
 }
